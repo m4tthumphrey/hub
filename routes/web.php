@@ -3,7 +3,7 @@
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn() => redirect()->route('wealth.index'));
+Route::get('/', fn() => response(null, 444));
 
 Route::name('wealth.')->prefix('wealth')->group(function() {
     Route::get('/', [Controller::class, 'index'])->name('index');
