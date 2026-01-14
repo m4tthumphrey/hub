@@ -103,7 +103,7 @@ class Controller
                 $source = Source::findOrFail($sourceId);
                 $amount = str_replace(['£', ','], '', $amount);
 
-                $this->updateAmount($source, $amount);
+                $this->updateAmount($source, (int) $amount);
             }
         }
 
