@@ -85,14 +85,16 @@ class ListenForEventsCommand extends Command
             $response = $this->petsure->get('timeline/household/' . config('services.petsure.household_id'), []);
             $json     = json_decode($response->getBody()->getContents(), true);
             $lastId   = $overriddenLastId ?: $cache->get(self::CACHE_KEY);
+            $stored   = false;
 
             foreach ($json['data'] as $item) {
                 if ($item['id'] <= $lastId) {
                     break;
                 }
 
-                if (!$overriddenLastId) {
+                if (!$overriddenLastId && !$stored) {
                     $cache->put(self::CACHE_KEY, $item['id']);
+                    $stored = true;
                 }
 
                 if ($item['type'] !== 0) {
