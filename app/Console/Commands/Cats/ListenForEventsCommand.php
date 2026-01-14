@@ -75,7 +75,7 @@ class ListenForEventsCommand extends Command
                     'tag_id'     => Arr::random(array_keys(self::CATS)),
                     'direction'  => Arr::random(array_keys(self::DIRECTIONS)),
                     'created_at' => now()->toIso8601ZuluString()
-                ]);
+                ], true);
             }
 
             return;
@@ -110,13 +110,17 @@ class ListenForEventsCommand extends Command
         }
     }
 
-    protected function processMovement(array $movement)
+    protected function processMovement(array $movement, bool $simulated = false): void
     {
         $tagId     = $movement['tag_id'];
         $direction = $movement['direction'];
         $date      = new Carbon($movement['created_at']);
         $cat       = self::CATS[$tagId];
         $message   = $cat['name'] . ' ' . self::DIRECTIONS[$direction];
+
+        if ($simulated) {
+            $message .= ' [simulated]';
+        }
 
         if (null === ($device = $this->option('push-device'))) {
             $device = config('services.pushover.device');
