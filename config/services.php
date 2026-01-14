@@ -39,7 +39,7 @@ return [
         'client'       => [
             'base_uri' => env('PETSURE_URL'),
             'headers'  => [
-                'Authorization'   => 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTM5MDY5MzY0IiwianRpIjoiODdkYTQ5MmYtMzAzMC00NjQ5LTg1M2YtY2QwYjhlNWIyYjQ0IiwiaWF0IjoxNzY4MzM2Nzk0LCJjbGllbnRfdWlkIjoid2ViIiwiZGV2aWNlX2lkIjoid2ViIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvZW1haWxhZGRyZXNzIjoibGVzbGV5d2F0dHMwMUBob3RtYWlsLmNvbSIsIm5iZiI6MTc2ODMzNjc5NCwiZXhwIjoxNzk5ODcyNzk0fQ.H9M4NqxeVyy_HCY3yw2-FHTQVwCzsw-WuuC5iiGeo50',
+                'Authorization'   => 'Bearer ' . env('PETSURE_ACCESS_TOKEN'),
                 'Accept'          => 'application/json, */*',
                 'Accept-Encoding' => 'gzip, deflate, br, zstd',
                 'Accept-Language' => 'en-US,en-GB;q=0.9',
@@ -49,8 +49,8 @@ return [
             ]
         ],
         'auth'         => [
-            'username' => '',
-            'password' => ''
+            'username' => env('PETSURE_USERNAME'),
+            'password' => env('PETSURE_PASSWORD')
         ],
         'household_id' => env('PETSURE_HOUSEHOLD_ID')
     ],
