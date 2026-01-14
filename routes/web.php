@@ -3,6 +3,10 @@
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [Controller::class, 'index']);
-Route::post('/update', [Controller::class, 'update']);
-Route::post('/screenshot', [Controller::class, 'screenshot']);
+Route::get('/', fn() => redirect()->route('wealth.index'));
+
+Route::name('wealth.')->prefix('prefix')->group(function() {
+    Route::get('/', [Controller::class, 'index'])->name('index');
+    Route::post('/update', [Controller::class, 'update'])->name('update');
+    Route::post('/screenshot', [Controller::class, 'screenshot'])->name('screenshot');
+});
