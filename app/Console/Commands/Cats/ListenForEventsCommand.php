@@ -9,6 +9,7 @@ use GuzzleHttp\Client;
 use Illuminate\Cache\Repository;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Input\InputOption;
 
 class ListenForEventsCommand extends Command
@@ -129,12 +130,18 @@ class ListenForEventsCommand extends Command
                 $device = config('services.pushover.device');
             }
 
+            $payload = [
+                'device'  => $device,
+                'sound'   => Arr::random($cat['sounds'][$direction]),
+                'message' => $message
+            ];
+
             $this->pushover->post('messages.json', [
-                'form_params' => [
-                    'device'  => $device,
-                    'sound'   => Arr::random($cat['sounds'][$direction]),
-                    'message' => $message
-                ]
+                'form_params' => $payload
+            ]);
+
+            Log::debug('Pushover: ' . $message, [
+                'data' => $payload
             ]);
         }
     }
