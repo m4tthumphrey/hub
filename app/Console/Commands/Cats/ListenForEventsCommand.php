@@ -122,13 +122,13 @@ class ListenForEventsCommand extends Command
             $message .= ' [simulated]';
         }
 
-        if (null === ($device = $this->option('push-device'))) {
-            $device = config('services.pushover.device');
-        }
-
         $this->info(sprintf('%s: %s', $date->format('H:i:s'), $message));
 
         if ($this->option('push')) {
+            if (null === ($device = $this->option('push-device'))) {
+                $device = config('services.pushover.device');
+            }
+
             $this->pushover->post('messages.json', [
                 'form_params' => [
                     'device'  => $device,
