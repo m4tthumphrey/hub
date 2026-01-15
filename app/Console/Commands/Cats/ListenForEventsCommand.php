@@ -140,7 +140,7 @@ class ListenForEventsCommand extends Command
                 'form_params' => $payload
             ]);
 
-            Log::debug('Pushover: ' . $message, [
+            Log::debug($message, [
                 'data' => $payload
             ]);
         }
