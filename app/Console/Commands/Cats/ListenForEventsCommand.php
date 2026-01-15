@@ -106,7 +106,9 @@ class ListenForEventsCommand extends Command
             }
         }
 
-        sleep($sleep);
+        if ($sleep) {
+            sleep($sleep);
+        }
     }
 
     protected function processMovement(array $movement, bool $simulated = false): void
@@ -151,7 +153,7 @@ class ListenForEventsCommand extends Command
             ['push', null, InputOption::VALUE_NONE, 'Push notifications'],
             ['push-device', null, InputOption::VALUE_REQUIRED, 'Push notifications to this device'],
             ['simulate', null, InputOption::VALUE_REQUIRED, 'Simulate this number of times'],
-            ['sleep', null, InputOption::VALUE_REQUIRED, 'Sleep time in seconds', 10],
+            ['sleep', null, InputOption::VALUE_REQUIRED, 'Sleep time in seconds'],
         ];
     }
 }
