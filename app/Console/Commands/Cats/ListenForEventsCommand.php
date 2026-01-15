@@ -82,33 +82,31 @@ class ListenForEventsCommand extends Command
             return;
         }
 
-        while (true) {
-            $response = $this->petsure->get('timeline/household/' . config('services.petsure.household_id'), []);
-            $json     = json_decode($response->getBody()->getContents(), true);
-            $lastId   = $overriddenLastId ?: $cache->get(self::CACHE_KEY);
-            $stored   = false;
+        $response = $this->petsure->get('timeline/household/' . config('services.petsure.household_id'));
+        $json     = json_decode($response->getBody()->getContents(), true);
+        $lastId   = $overriddenLastId ?: $cache->get(self::CACHE_KEY);
+        $stored   = false;
 
-            foreach ($json['data'] as $item) {
-                if ($item['id'] <= $lastId) {
-                    break;
-                }
-
-                if (!$overriddenLastId && !$stored) {
-                    $cache->put(self::CACHE_KEY, $item['id']);
-                    $stored = true;
-                }
-
-                if ($item['type'] !== 0) {
-                    continue;
-                }
-
-                foreach ($item['movements'] as $movement) {
-                    $this->processMovement($movement);
-                }
+        foreach ($json['data'] as $item) {
+            if ($item['id'] <= $lastId) {
+                break;
             }
 
-            sleep($sleep);
+            if (!$overriddenLastId && !$stored) {
+                $cache->put(self::CACHE_KEY, $item['id']);
+                $stored = true;
+            }
+
+            if ($item['type'] !== 0) {
+                continue;
+            }
+
+            foreach ($item['movements'] as $movement) {
+                $this->processMovement($movement);
+            }
         }
+
+        sleep($sleep);
     }
 
     protected function processMovement(array $movement, bool $simulated = false): void
