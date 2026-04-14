@@ -4,6 +4,7 @@ namespace App\Console\Commands\Withings;
 
 use App\Models\WeightLog;
 use App\Services\Withings\WithingsClient;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 
@@ -36,6 +37,7 @@ class GetWeightCommand extends Command
 
         if (!$weight || $weightInGrams !== $weight->weight_grams) {
             WeightLog::create([
+                'date'             => Carbon::parse($measureGroup['date'])->format('Y-m-d H:i:s'),
                 'weight_grams'     => $weightInGrams,
                 'weight_kilograms' => $weightInKilograms,
                 'weight_pounds'    => $weightInPounds,
