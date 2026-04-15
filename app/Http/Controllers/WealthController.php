@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-class Controller
+class WealthController
 {
     public function index(): View
     {
@@ -103,7 +103,9 @@ class Controller
                 $source = Source::findOrFail($sourceId);
                 $amount = str_replace(['£', ','], '', $amount);
 
-                $this->updateAmount($source, (int) $amount);
+                if ($amount) {
+                    $this->updateAmount($source, (int) $amount);
+                }
             }
         }
 

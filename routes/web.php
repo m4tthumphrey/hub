@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\WealthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -26,9 +26,9 @@ Route::get('withings/callback', function(Request $request) {
 Route::get('/', fn() => response(null, 444));
 
 Route::group(['middleware' => 'auth.basic'], function () {
-    Route::name('wealth.')->prefix('wealth')->group(function () {
-        Route::get('/', [Controller::class, 'index'])->name('index');
-        Route::post('/update', [Controller::class, 'update'])->name('update');
-        Route::post('/screenshot', [Controller::class, 'screenshot'])->name('screenshot');
+    Route::name('wealth.')->prefix('wealth')->controller(WealthController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/update', 'update')->name('update');
+        Route::post('/screenshot', 'screenshot')->name('screenshot');
     });
 });
