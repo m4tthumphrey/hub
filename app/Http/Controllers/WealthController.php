@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Screenshot;
-use App\Models\Source;
+use App\Models\Wealth\Screenshot;
+use App\Models\Wealth\Source;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
