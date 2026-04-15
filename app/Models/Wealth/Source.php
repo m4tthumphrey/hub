@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Source extends Model
 {
-    protected $table = 'sources';
+    protected $table = 'wealth_sources';
 
     public function values(): HasMany
     {

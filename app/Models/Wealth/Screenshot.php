@@ -6,6 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class Screenshot extends Model
 {
-    protected $table = 'screenshots';
+    protected $table = 'wealth_screenshots';
     protected $guarded = ['id'];
 }
