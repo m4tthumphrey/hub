@@ -22,7 +22,9 @@ class ScreenshotTextParser
 
         return match ($app) {
             'Trading 212' => $this->tradingTwoOneTwo($lines, $text),
-            'Chip'        => $this->amountFor(10, $lines, 'Savings'),
+            // "Cash ISA" is followed by "Easy access" then the balance; the
+            // headline "My savings" figure is truncated (no pence) by OCR.
+            'Tembo'       => $this->amountFor(12, $lines, 'Cash ISA'),
             'MyAviva'     => $this->amountFor(9, $lines, 'YOUR WEALTH PORTFOLIO'),
             // "SAVINGS" is the section header above the Regular Saver
             // account -- the app also shows Joint/Personal current accounts,
@@ -30,7 +32,6 @@ class ScreenshotTextParser
             'NatWest'     => $this->amountFor(1, $lines, 'SAVINGS'),
             'Chrome'      => $this->retiready($lines, $text),
             'HL'          => $this->firstAmount(7, $text),
-            'Monbs'       => $this->amountFor(2, $lines, 'Balance:'),
             default       => $this->courtiers($text),
         };
     }
