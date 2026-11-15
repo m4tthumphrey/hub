@@ -281,6 +281,30 @@ class LiabilitiesTest extends TestCase
         $this->assertSame(['property' => 475000, 'liabilities' => 248500, 'net_worth' => 276500], $data['summary']);
     }
 
+    public function test_typed_values_are_logged_with_their_origin_and_listed_as_changes(): void
+    {
+        $this->addLiquidSource(50000);
+        $id = DB::table('wealth_sources')->where('description', 'Savings')->value('id');
+
+        $this->travelTo('2026-11-16 09:00:00');
+        $this->postJson('/wealth/update', ['id' => $id, 'name' => 'current', 'value' => 51000])->assertOk();
+
+        // Saving the same value again changes nothing, and must not touch the monthly amount.
+        $this->postJson('/wealth/update', ['id' => $id, 'name' => 'current', 'value' => 51000])->assertOk();
+        $this->assertSame(0, DB::table('wealth_sources')->where('id', $id)->value('regular_amount'));
+        $this->assertSame(2, DB::table('wealth_source_values')->where('source_id', $id)->count());
+
+        $data   = $this->getJson('/wealth/data')->json();
+        $source = collect($data['sources'])->firstWhere('id', $id);
+
+        $this->assertSame('manual', $source['last_origin']);
+        $this->assertStringStartsWith('2026-11-16', $source['last_updated']);
+        $this->assertEquals(
+            ['description' => 'Savings', 'value' => 51000, 'previous' => 50000, 'origin' => 'manual'],
+            array_intersect_key($data['changes'][0], array_flip(['description', 'value', 'previous', 'origin'])),
+        );
+    }
+
     public function test_history_includes_liabilities_and_net_worth(): void
     {
         $this->addLiquidSource(50000);

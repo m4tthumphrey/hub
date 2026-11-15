@@ -35,3 +35,50 @@ export function percent(value) {
     if (value === null || value === undefined) return '—'
     return `${Number(value).toFixed(2)}%`
 }
+
+// 'today', 'yesterday' or '3 Nov' for a date or timestamp.
+export function dayLabel(date) {
+    if (!date) return ''
+    const { y, m, d } = parts(date)
+    const now = new Date()
+    const days = Math.round((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(y, m - 1, d)) / 86400000)
+    if (days === 0) return 'today'
+    if (days === 1) return 'yesterday'
+    return `${d} ${MONTHS[m - 1]}${y === now.getFullYear() ? '' : ' ' + y}`
+}
+
+export function daysSince(date) {
+    if (!date) return Infinity
+    const { y, m, d } = parts(date)
+    const now = new Date()
+    return Math.round((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(y, m - 1, d)) / 86400000)
+}
+
+export function signedMoney(value, decimals = 0) {
+    return (value > 0 ? '+' : value < 0 ? '−' : '') + money(Math.abs(value), decimals)
+}
+
+// Light-theme defaults shared by the Apex charts.
+export function chartBase(type) {
+    return {
+        chart: {
+            type,
+            background: 'transparent',
+            toolbar: { show: false },
+            zoom: { enabled: false },
+            fontFamily: 'inherit',
+            animations: { enabled: false },
+        },
+        xaxis: {
+            type: 'datetime',
+            labels: { style: { colors: '#5b6472' }, datetimeUTC: false },
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+        },
+        yaxis: {
+            labels: { style: { colors: '#5b6472' }, formatter: val => money(Math.round(val)) },
+        },
+        grid: { borderColor: '#e2e5ec', strokeDashArray: 4, padding: { left: 4, right: 8 } },
+        dataLabels: { enabled: false },
+    }
+}

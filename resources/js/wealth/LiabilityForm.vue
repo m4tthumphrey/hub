@@ -1,117 +1,107 @@
 <template>
     <div
-        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 sm:p-8"
+        class="fixed inset-0 z-50 flex items-end md:items-start justify-center overflow-y-auto bg-black/40 md:p-8"
         @click.self="$emit('close')"
     >
-        <form class="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-xl" @submit.prevent="save">
-            <div class="px-5 py-4 border-b border-gray-800">
-                <h2 class="text-sm font-semibold text-white">{{ title }}</h2>
-                <p class="text-xs text-gray-500 mt-1">
-                    Saving adds a new dated record. Earlier records are kept as they were.
-                </p>
+        <form class="w-full max-w-2xl bg-white rounded-t-3xl md:rounded-3xl max-h-full overflow-y-auto" @submit.prevent="save">
+            <div class="px-5 pt-5 pb-4 border-b border-line">
+                <h2 class="text-lg font-bold">{{ title }}</h2>
+                <p class="text-[13px] text-muted mt-1">Saving adds a new dated record. Earlier records are kept as they were.</p>
             </div>
 
-            <div class="p-5 space-y-5">
-                <label v-if="!liability" class="block text-xs text-gray-400 space-y-1.5">
-                    <span>Description</span>
-                    <input v-model="form.description" type="text" maxlength="100" placeholder="Car finance" :class="inputClass" />
+            <div class="p-5 flex flex-col gap-5">
+                <label v-if="!liability" class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                    Description
+                    <input v-model="form.description" type="text" maxlength="100" placeholder="Car finance" class="w-input" />
                 </label>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label class="block text-xs text-gray-400 space-y-1.5">
-                        <span>Figures correct as of</span>
-                        <input v-model="form.effective_date" type="date" :max="today" :class="inputClass" />
+                    <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                        Figures correct as of
+                        <input v-model="form.effective_date" type="date" :max="today" class="w-input" />
                     </label>
-                    <label class="block text-xs text-gray-400 space-y-1.5">
-                        <span>{{ isMortgage ? 'Loan remaining' : 'Amount owed' }} (£)</span>
-                        <input v-model="form.balance" type="number" step="0.01" min="0" :class="inputClass" />
+                    <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                        {{ isMortgage ? 'Loan remaining' : 'Amount owed' }} (£)
+                        <input v-model="form.balance" type="number" inputmode="decimal" step="0.01" min="0" class="w-input" />
                     </label>
-                    <label class="block text-xs text-gray-400 space-y-1.5">
-                        <span>{{ isMortgage ? 'Fixed interest rate' : 'Interest rate' }} (%)</span>
-                        <input v-model="form.interest_rate" type="number" step="0.001" min="0" :class="inputClass" />
+                    <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                        {{ isMortgage ? 'Fixed interest rate' : 'Interest rate' }} (%)
+                        <input v-model="form.interest_rate" type="number" inputmode="decimal" step="0.001" min="0" class="w-input" />
                     </label>
-                    <div class="text-xs text-gray-400 space-y-1.5">
-                        <span>Term remaining</span>
+                    <div class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                        Term remaining
                         <div class="grid grid-cols-2 gap-2">
-                            <div class="relative">
-                                <input v-model="form.years" type="number" min="0" aria-label="Years remaining" :class="inputClass" />
-                                <span class="absolute right-3 top-2 text-gray-600">years</span>
-                            </div>
-                            <div class="relative">
-                                <input v-model="form.months" type="number" min="0" max="11" aria-label="Months remaining" :class="inputClass" />
-                                <span class="absolute right-3 top-2 text-gray-600">months</span>
-                            </div>
+                            <label class="relative">
+                                <input v-model="form.years" type="number" inputmode="numeric" min="0" aria-label="Years remaining" class="w-input pr-14" />
+                                <span class="absolute right-3 top-3.5 font-normal text-muted">years</span>
+                            </label>
+                            <label class="relative">
+                                <input v-model="form.months" type="number" inputmode="numeric" min="0" max="11" aria-label="Months remaining" class="w-input pr-16" />
+                                <span class="absolute right-3 top-3.5 font-normal text-muted">months</span>
+                            </label>
                         </div>
                     </div>
                     <template v-if="isMortgage">
-                        <label class="block text-xs text-gray-400 space-y-1.5">
-                            <span>Fixed rate ends</span>
-                            <input v-model="form.fix_end_date" type="date" :class="inputClass" />
+                        <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                            Fixed rate ends
+                            <input v-model="form.fix_end_date" type="date" class="w-input" />
                         </label>
-                        <label class="block text-xs text-gray-400 space-y-1.5">
-                            <span>Assumed rate after the fix (%)</span>
-                            <input v-model="form.follow_on_rate" type="number" step="0.001" min="0" placeholder="Same as fixed rate" :class="inputClass" />
+                        <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                            Assumed rate after the fix (%)
+                            <input v-model="form.follow_on_rate" type="number" inputmode="decimal" step="0.001" min="0" placeholder="Same as fixed rate" class="w-input" />
                         </label>
                     </template>
-                    <label class="block text-xs text-gray-400 space-y-1.5">
-                        <span>Regular overpayment (£ per month)</span>
-                        <input v-model="form.regular_overpayment" type="number" step="0.01" min="0" :class="inputClass" />
+                    <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                        Regular overpayment (£ per month)
+                        <input v-model="form.regular_overpayment" type="number" inputmode="decimal" step="0.01" min="0" class="w-input" />
                     </label>
-                    <label class="block text-xs text-gray-400 space-y-1.5">
-                        <span>{{ isMortgage ? "Lender's" : 'Actual' }} monthly payment (£, optional)</span>
-                        <input v-model="form.actual_payment" type="number" step="0.01" min="0" placeholder="Use calculated" :class="inputClass" />
-                        <span v-if="carriedPayment" class="block text-gray-600">
+                    <label class="flex flex-col gap-1.5 text-xs font-semibold text-gray-700">
+                        {{ isMortgage ? "Lender's" : 'Actual' }} monthly payment (£, optional)
+                        <input v-model="form.actual_payment" type="number" inputmode="decimal" step="0.01" min="0" placeholder="Use calculated" class="w-input" />
+                        <span v-if="carriedPayment" class="font-normal text-muted">
                             Carried over from your last save. Clear it to recalculate from the balance and term.
                         </span>
                     </label>
                 </div>
 
-                <div class="rounded-lg border border-dashed border-gray-700 bg-gray-950 px-4 py-3">
+                <div class="rounded-2xl border border-dashed border-line-strong bg-canvas px-4 py-3.5">
                     <div v-if="preview" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div>
-                            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly payment</div>
-                            <div class="text-base font-semibold text-white tabular-nums">{{ money(preview.monthly_payment, 2) }}</div>
-                            <div class="text-xs text-gray-600">
-                                {{ usingActual ? 'entered · calculated ' + money(preview.calculated_payment, 2) : 'calculated' }}
-                            </div>
+                            <div class="text-xs text-muted">Monthly payment</div>
+                            <div class="text-base font-bold">{{ money(preview.monthly_payment, 2) }}</div>
+                            <div class="text-xs text-muted">{{ usingActual ? 'entered · calculated ' + money(preview.calculated_payment, 2) : 'calculated' }}</div>
                         </div>
                         <div>
-                            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total each month</div>
-                            <div class="text-base font-semibold text-white tabular-nums">{{ money(preview.monthly_payment + overpayment, 2) }}</div>
-                            <div class="text-xs text-gray-600">with overpayment</div>
+                            <div class="text-xs text-muted">Total each month</div>
+                            <div class="text-base font-bold">{{ money(preview.monthly_payment + overpayment, 2) }}</div>
+                            <div class="text-xs text-muted">with overpayment</div>
                         </div>
                         <div>
-                            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider">Paid off</div>
-                            <div class="text-base font-semibold tabular-nums" :class="preview.payoff_date ? 'text-emerald-400' : 'text-rose-400'">
+                            <div class="text-xs text-muted">Paid off</div>
+                            <div class="text-base font-bold" :class="preview.payoff_date ? 'text-up' : 'text-down'">
                                 {{ preview.payoff_date ? monthYear(preview.payoff_date) : 'Never' }}
                             </div>
-                            <div class="text-xs text-gray-600">
+                            <div class="text-xs text-muted">
                                 {{ preview.months_saved ? duration(preview.months_saved) + ' early' : preview.payoff_date ? 'on schedule' : 'payment below interest' }}
                             </div>
                         </div>
                         <div>
-                            <div class="text-xs font-medium text-gray-500 uppercase tracking-wider">Interest to pay</div>
-                            <div class="text-base font-semibold text-white tabular-nums">{{ money(preview.interest_remaining) }}</div>
-                            <div class="text-xs text-gray-600">{{ preview.interest_saved ? 'saves ' + money(preview.interest_saved) : '' }}</div>
+                            <div class="text-xs text-muted">Interest to pay</div>
+                            <div class="text-base font-bold">{{ money(preview.interest_remaining) }}</div>
+                            <div class="text-xs text-muted">{{ preview.interest_saved ? 'saves ' + money(preview.interest_saved) : '' }}</div>
                         </div>
                     </div>
-                    <div v-else class="text-sm text-gray-600">
-                        Enter the amount owed, rate and term to see the payment and payoff date.
-                    </div>
+                    <div v-else class="text-sm text-muted">Enter the amount owed, rate and term to see the payment and payoff date.</div>
                 </div>
 
-                <ul v-if="errors.length" class="text-sm text-rose-400 space-y-1">
+                <ul v-if="errors.length" class="text-sm text-down flex flex-col gap-1">
                     <li v-for="error in errors" :key="error">{{ error }}</li>
                 </ul>
             </div>
 
-            <div class="px-5 py-4 border-t border-gray-800 flex justify-end gap-2">
-                <button type="button" class="px-3 py-1.5 rounded-lg text-sm text-gray-300 bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors" @click="$emit('close')">
-                    Cancel
-                </button>
-                <button type="submit" :disabled="saving || !complete" class="px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors">
-                    {{ saving ? 'Saving…' : 'Save as new record' }}
-                </button>
+            <div class="px-5 pt-4 border-t border-line grid grid-cols-[104px_minmax(0,1fr)] gap-2.5" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom))">
+                <button type="button" class="w-btn h-12 rounded-[14px] text-[15px]" @click="$emit('close')">Cancel</button>
+                <button type="submit" class="w-btn-primary" :disabled="saving || !complete">{{ saving ? 'Saving…' : 'Save as new record' }}</button>
             </div>
         </form>
     </div>
@@ -127,8 +117,6 @@ const props = defineProps({
     liability: { type: Object, default: null },
 })
 const emit = defineEmits(['close', 'saved'])
-
-const inputClass = 'w-full bg-gray-800 border border-gray-700/50 rounded-lg px-3 py-2 text-gray-200 text-sm tabular-nums focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition-colors'
 
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`

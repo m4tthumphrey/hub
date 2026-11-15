@@ -7,5 +7,62 @@
 @source '../**/*.vue';
 
 @theme {
-    --font-sans: sans-serif;
+    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+
+    /* Wealth dashboard */
+    --color-canvas: #f3f4f7;
+    --color-ink: #111827;
+    --color-muted: #5b6472;
+    --color-line: #e2e5ec;
+    --color-line-strong: #c5cad6;
+    --color-brand: #2447d8;
+    --color-brand-soft: #e8ecfb;
+    --color-brand-wash: #f5f7fe;
+    --color-owe: #f26b21;
+    --color-owe-ink: #b54708;
+    --color-up: #047857;
+    --color-down: #b42318;
+}
+
+@layer components {
+    .w-card {
+        @apply bg-white border border-line rounded-[20px];
+    }
+
+    .w-label {
+        @apply text-[13px] font-semibold uppercase tracking-wider text-muted;
+    }
+
+    .w-btn {
+        @apply inline-flex items-center justify-center h-11 px-4 rounded-xl border border-line-strong bg-white text-ink text-sm font-semibold transition-colors hover:bg-canvas disabled:opacity-40;
+    }
+
+    .w-btn-primary {
+        @apply inline-flex items-center justify-center h-12 px-5 rounded-[14px] bg-ink text-white text-[15px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40;
+    }
+
+    .w-chip {
+        @apply inline-flex items-center h-11 px-4 rounded-full border border-line bg-white text-ink text-[13px] font-semibold whitespace-nowrap;
+    }
+
+    .w-chip-on {
+        @apply border-ink bg-ink text-white;
+    }
+
+    /* A money field: the wrapper carries the border so the £ sits inside it. */
+    .w-field {
+        @apply flex items-center gap-1 h-14 px-3 rounded-[14px] border border-line-strong bg-white focus-within:border-brand focus-within:ring-1 focus-within:ring-brand;
+    }
+
+    .w-field > span {
+        @apply text-lg font-semibold text-muted;
+    }
+
+    .w-field > input {
+        @apply flex-1 min-w-0 bg-transparent outline-none text-ink text-[22px] font-bold tabular-nums;
+    }
+
+    .w-input {
+        @apply w-full h-12 px-3 rounded-xl border border-line-strong bg-white text-ink text-base tabular-nums outline-none focus:border-brand focus:ring-1 focus:ring-brand;
+    }
 }

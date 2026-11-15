@@ -23,9 +23,12 @@ class WealthController
     {
         $sources = DB::select("
             SELECT s.id, s.who, s.description, s.category_id, c.name as category_name, c.is_liquid,
-                   s.regular_amount, s.current_amount
+                   s.regular_amount, s.current_amount,
+                   lv.created_at as last_updated, lv.origin as last_origin
             FROM wealth_sources s
             JOIN wealth_source_categories c ON c.id = s.category_id
+            LEFT JOIN wealth_source_values lv
+                ON lv.id = (SELECT MAX(id) FROM wealth_source_values WHERE source_id = s.id)
             ORDER BY s.category_id, s.id
         ");
         $totals  = DB::select("
@@ -46,7 +49,8 @@ class WealthController
         $liquid   = (int) end($totals)->total;
         $property = (int) array_sum(array_map(fn ($s) => $s->is_liquid ? 0 : $s->current_amount, $sources));
         $today    = CarbonImmutable::today();
-        $owed     = (int) round(Liability::with('records')->get()->sum(
+        $liabilities = Liability::with(['records', 'values'])->get();
+        $owed        = (int) round($liabilities->sum(
             fn (Liability $liability) => $liabilityService->balanceOn($liability, $today) ?? 0
         ));
 
@@ -58,7 +62,49 @@ class WealthController
                 'liabilities' => $owed,
                 'net_worth'   => $liquid + $property - $owed,
             ],
+            'changes' => $this->latestChanges($liabilities),
         ];
+    }
+
+    /** The most recent value changes across accounts and liabilities, newest first. */
+    private function latestChanges($liabilities): array
+    {
+        $changes = array_map(fn ($row) => [
+            'description' => $row->description,
+            'value'       => (float) $row->value,
+            'previous'    => $row->previous === null ? null : (float) $row->previous,
+            'origin'      => $row->origin,
+            'date'        => $row->created_at,
+            'liability'   => false,
+        ], DB::select("
+            SELECT s.description, sv.value, sv.origin, sv.created_at,
+                   (SELECT p.value FROM wealth_source_values p
+                    WHERE p.source_id = sv.source_id AND p.id < sv.id
+                    ORDER BY p.id DESC LIMIT 1) as previous
+            FROM wealth_source_values sv
+            JOIN wealth_sources s ON s.id = sv.source_id
+            ORDER BY sv.created_at DESC, sv.id DESC
+            LIMIT 6
+        "));
+
+        foreach ($liabilities as $liability) {
+            [$latest, $before] = [$liability->values->get(0), $liability->values->get(1)];
+
+            if ($latest) {
+                $changes[] = [
+                    'description' => $liability->description,
+                    'value'       => $latest->balance,
+                    'previous'    => $before?->balance,
+                    'origin'      => $latest->is_manual ? 'entered' : 'auto',
+                    'date'        => $latest->date->toDateString() . ' 00:00:00',
+                    'liability'   => true,
+                ];
+            }
+        }
+
+        usort($changes, fn ($a, $b) => strcmp(substr($b['date'], 0, 10), substr($a['date'], 0, 10)));
+
+        return array_slice($changes, 0, 6);
     }
 
     public function history(LiabilityService $liabilityService): array
@@ -184,8 +230,8 @@ class WealthController
 
         $source = Source::findOrFail($id);
 
-        if ($name === 'current' && $value !== $source->current_amount) {
-            $this->updateAmount($source, $value);
+        if ($name === 'current') {
+            $this->updateAmount($source, $value, 'manual');
         } elseif ($value !== $source->regular_amount) {
             $source->regular_amount = $value;
             $source->save();
@@ -210,7 +256,7 @@ class WealthController
 
         foreach ($updates as $sourceId => $amount) {
             if ($amount) {
-                $this->updateAmount(Source::findOrFail($sourceId), (int) $amount);
+                $this->updateAmount(Source::findOrFail($sourceId), (int) $amount, 'screenshot');
             }
         }
 
@@ -219,14 +265,15 @@ class WealthController
         ];
     }
 
-    private function updateAmount(Source $source, int $amount)
+    private function updateAmount(Source $source, int $amount, string $origin)
     {
         if ($amount > 0 && $amount != $source->current_amount) {
             $source->current_amount = $amount;
             $source->save();
 
             $source->values()->create([
-                'value' => $amount
+                'value'  => $amount,
+                'origin' => $origin,
             ]);
         }
     }
