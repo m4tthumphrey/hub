@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Wealth\Liability;
 use App\Models\Wealth\LiabilityOverpayment;
+use App\Models\Wealth\LiabilityValue;
 use App\Services\Wealth\LiabilityService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -15,8 +16,11 @@ class LiabilityController
 
     public function index(): array
     {
+        // Log any payment dates that have passed since the dashboard was last opened.
+        Liability::all()->each(fn (Liability $liability) => $this->liabilities->syncLog($liability));
+
         return [
-            'liabilities' => Liability::with(['records', 'overpayments'])
+            'liabilities' => Liability::with(['records', 'overpayments', 'values'])
                 ->orderBy('id')
                 ->get()
                 ->map(fn (Liability $liability) => $this->liabilities->state($liability)),
@@ -54,13 +58,27 @@ class LiabilityController
         $number = fn (string $key) => isset($data[$key]) ? (float) $data[$key] : null;
 
         return [
-            'what_if' => $this->liabilities->whatIf($liability->load('records', 'overpayments'), $number('regular_overpayment'), $number('lump_sum')),
+            'what_if' => $this->liabilities->whatIf($liability->load('records', 'overpayments', 'values'), $number('regular_overpayment'), $number('lump_sum')),
         ];
     }
 
     public function storeRecord(Request $request, Liability $liability): array
     {
         $this->liabilities->saveRecord($liability, $request->validate(LiabilityService::rules()));
+
+        return ['status' => 'ok'];
+    }
+
+    public function updateValue(Request $request, Liability $liability, LiabilityValue $value): array
+    {
+        abort_unless($value->liability_id === $liability->id, 404);
+
+        $data    = $request->validate(['balance' => ['required', 'numeric', 'min:0', 'max:99999999']]);
+        $current = $liability->records()->first();
+
+        abort_if(! $current || $value->date->lt($current->effective_date), 422, 'Only entries since the last saved details can be corrected.');
+
+        DB::transaction(fn () => $this->liabilities->correctValue($liability, $value, (float) $data['balance']));
 
         return ['status' => 'ok'];
     }

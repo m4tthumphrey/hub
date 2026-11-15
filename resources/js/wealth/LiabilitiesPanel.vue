@@ -244,7 +244,7 @@
             </div>
         </div>
 
-        <!-- One-off overpayments and saved records for the selected liability -->
+        <!-- One-off overpayments and the balance log for the selected liability -->
         <div v-if="selected" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
             <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -287,6 +287,65 @@
             </div>
 
             <div class="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-800 flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ selected.description }} · balance log</h2>
+                    <span class="text-xs text-gray-600">Logged automatically on each payment date. Correct an entry to match your lender.</span>
+                </div>
+                <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table v-if="selected.values.length" class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-800 text-xs font-medium text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                                <th class="text-left px-5 py-3">Date</th>
+                                <th class="text-right px-5 py-3">Balance</th>
+                                <th class="text-left px-5 py-3">Source</th>
+                                <th class="text-right px-5 py-3">Against projection</th>
+                                <th class="px-5 py-3 w-40"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800/60">
+                            <tr v-for="value in selected.values" :key="value.id" class="whitespace-nowrap">
+                                <td class="px-5 py-3 text-gray-200">{{ shortDate(value.date) }}</td>
+                                <td class="px-5 py-3 text-right text-gray-200 tabular-nums">
+                                    <input
+                                        v-if="editing.id === value.id"
+                                        v-model="editing.balance"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        :aria-label="`Balance on ${shortDate(value.date)}`"
+                                        class="w-32 bg-gray-800 border border-gray-700/50 rounded-lg px-2 py-1 text-right text-gray-200 text-sm tabular-nums focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                        @keyup.enter="saveValue(value)"
+                                        @keyup.esc="editing.id = null"
+                                    />
+                                    <template v-else>{{ money(value.balance, 2) }}</template>
+                                </td>
+                                <td class="px-5 py-3">
+                                    <span class="text-xs px-2 py-0.5 rounded-full border" :class="value.is_manual ? 'text-indigo-300 border-indigo-900' : 'text-gray-400 border-gray-700'">
+                                        {{ value.is_manual ? 'entered' : 'projected' }}
+                                    </span>
+                                </td>
+                                <td class="px-5 py-3 text-right text-xs tabular-nums" :class="deltaClass(-drift(value))">
+                                    {{ driftLabel(value) }}
+                                </td>
+                                <td class="px-5 py-3 text-right">
+                                    <template v-if="editing.id === value.id">
+                                        <button :class="primaryButton" :disabled="busy" @click="saveValue(value)">Save</button>
+                                        <button class="ml-2 text-xs text-gray-500 hover:text-gray-300" @click="editing.id = null">Cancel</button>
+                                    </template>
+                                    <button v-else-if="value.editable" :class="secondaryButton" @click="startEditing(value)">Correct</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="px-5 py-4 text-sm text-gray-600">The balance will be logged here on each payment date once details are saved.</p>
+                </div>
+                <p v-if="editing.error" class="px-5 py-3 text-xs text-rose-400 border-t border-gray-800">{{ editing.error }}</p>
+            </div>
+        </div>
+
+        <!-- Saved records for the selected liability -->
+        <div v-if="selected">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-gray-800 flex flex-wrap items-baseline justify-between gap-2">
                     <h2 class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ selected.description }} · saved records</h2>
                     <span class="text-xs text-gray-600">Newest first. Records are never edited.</span>
@@ -558,6 +617,45 @@ async function onSaved() {
     await load()
     if (adding) selectedId.value = liabilities.value[liabilities.value.length - 1].id
     emit('changed')
+}
+
+// --- Balance log ---
+
+const editing = reactive({ id: null, balance: '', error: '' })
+
+function startEditing(value) {
+    Object.assign(editing, { id: value.id, balance: value.balance, error: '' })
+}
+
+// How far an entered balance sits from what the projection said for that date.
+const drift = value => (value.is_manual && value.projected_balance !== null ? value.balance - value.projected_balance : 0)
+
+function driftLabel(value) {
+    const difference = drift(value)
+    if (!value.is_manual || value.projected_balance === null) return ''
+    if (Math.abs(difference) < 0.01) return 'matched'
+    return `${money(Math.abs(difference), 2)} ${difference < 0 ? 'below' : 'above'}`
+}
+
+async function saveValue(value) {
+    if (editing.balance === '' || Number(editing.balance) === value.balance) {
+        editing.id = null
+        return
+    }
+    busy.value = true
+    editing.error = ''
+    try {
+        await axios.put(`/wealth/liabilities/${selected.value.id}/values/${value.id}`, { balance: editing.balance })
+        editing.id = null
+        await load()
+        emit('changed')
+    } catch (error) {
+        editing.error = error.response?.status === 422
+            ? (error.response.data.message ?? 'That balance is not valid.')
+            : 'Could not save the correction.'
+    } finally {
+        busy.value = false
+    }
 }
 
 // --- One-off overpayments ---

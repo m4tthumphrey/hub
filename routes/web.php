@@ -41,6 +41,7 @@ Route::group(['middleware' => 'auth.basic'], function () {
         Route::post('/preview', 'preview')->name('preview');
         Route::post('/{liability}/what-if', 'whatIf')->name('what-if');
         Route::post('/{liability}/records', 'storeRecord')->name('records.store');
+        Route::put('/{liability}/values/{value}', 'updateValue')->name('values.update');
         Route::post('/{liability}/overpayments', 'storeOverpayment')->name('overpayments.store');
         Route::delete('/{liability}/overpayments/{overpayment}', 'destroyOverpayment')->name('overpayments.destroy');
     });

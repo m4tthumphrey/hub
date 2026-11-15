@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Wealth\Liability;
 use App\Models\Wealth\LiabilityRecord;
+use App\Models\Wealth\LiabilityValue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -180,6 +181,68 @@ class LiabilitiesTest extends TestCase
         $this->assertSame(1, LiabilityRecord::count());
         $this->assertDatabaseCount('wealth_liability_overpayments', 0);
         $this->assertSame($current, $this->getJson('/wealth/liabilities')->json('liabilities.0'));
+    }
+
+    public function test_balances_are_logged_automatically_on_each_payment_date(): void
+    {
+        $id = $this->mortgage()->id;
+        $this->postJson("/wealth/liabilities/{$id}/records", $this->details());
+
+        $this->assertSame(1, LiabilityValue::count());
+
+        $this->travelTo('2027-02-20 10:00:00');
+        $values = $this->getJson('/wealth/liabilities')->json('liabilities.0.values');
+
+        $this->assertSame(['2027-02-15', '2027-01-15', '2026-12-15', '2026-11-15'], array_column($values, 'date'));
+        $this->assertSame([false, false, false, true], array_column($values, 'is_manual'));
+        $this->assertEquals(248500, $values[3]['balance']);
+        $this->assertEquals(247655.05, $values[2]['balance']);
+
+        // Loading again, or running the command, adds nothing more.
+        $this->getJson('/wealth/liabilities');
+        $this->artisan('wealth:log-liabilities')->expectsOutput('Logged 0 balance(s).');
+        $this->assertSame(4, LiabilityValue::count());
+
+        $this->travelTo('2027-03-15 10:00:00');
+        $this->artisan('wealth:log-liabilities')->expectsOutput('Logged 1 balance(s).');
+    }
+
+    public function test_correcting_a_logged_balance_re_anchors_everything_after_it(): void
+    {
+        $id = $this->mortgage()->id;
+        $this->postJson("/wealth/liabilities/{$id}/records", $this->details());
+
+        $this->travelTo('2027-02-20 10:00:00');
+        $before = collect($this->getJson('/wealth/liabilities')->json('liabilities.0.values'))->keyBy('date');
+        $jan    = $before['2027-01-15'];
+
+        $this->putJson("/wealth/liabilities/{$id}/values/{$jan['id']}", ['balance' => $jan['balance'] - 300])->assertOk();
+
+        $state = $this->getJson('/wealth/liabilities')->json('liabilities.0');
+        $after = collect($state['values'])->keyBy('date');
+
+        // The corrected entry keeps what the projection had said, for the drift.
+        $this->assertEquals($jan['balance'] - 300, $after['2027-01-15']['balance']);
+        $this->assertEquals($jan['balance'], $after['2027-01-15']['projected_balance']);
+        $this->assertTrue($after['2027-01-15']['is_manual']);
+
+        // Earlier entries are untouched and now locked; later ones follow the corrected figure.
+        $this->assertEquals($before['2026-12-15']['balance'], $after['2026-12-15']['balance']);
+        $this->assertFalse($after['2026-12-15']['editable']);
+        $this->assertEqualsWithDelta($before['2027-02-15']['balance'] - 301, $after['2027-02-15']['balance'], 1);
+        $this->assertEquals($after['2027-02-15']['balance'], $state['balance_today']);
+
+        // Saved as a new record with the same payment, nothing overwritten.
+        $latest = LiabilityRecord::orderByDesc('id')->first();
+        $this->assertSame(2, LiabilityRecord::count());
+        $this->assertSame('2027-01-15', $latest->effective_date->toDateString());
+        $this->assertSame(1483.34, $latest->monthly_payment);
+        $this->assertSame(
+            'Logged balance for 15 Jan 2027 corrected. Balance entered as £246,507.08, £300 below the projection of £246,807.08.',
+            $latest->change_note,
+        );
+
+        $this->putJson("/wealth/liabilities/{$id}/values/{$after['2026-12-15']['id']}", ['balance' => 1])->assertStatus(422);
     }
 
     public function test_other_debts_can_be_added(): void

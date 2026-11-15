@@ -19,6 +19,12 @@ class Liability extends Model
             ->orderByDesc('id');
     }
 
+    /** The balance log, newest first. */
+    public function values(): HasMany
+    {
+        return $this->hasMany(LiabilityValue::class, 'liability_id')->orderByDesc('date');
+    }
+
     public function overpayments(): HasMany
     {
         return $this->hasMany(LiabilityOverpayment::class, 'liability_id')->orderByDesc('paid_on');

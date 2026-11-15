@@ -110,7 +110,7 @@ class WealthController
     private function netWorthHistory(array $liquidOverTime, array $bySource, LiabilityService $liabilityService): array
     {
         $today       = CarbonImmutable::today();
-        $liabilities = Liability::with('records')->get();
+        $liabilities = Liability::with(['records', 'values'])->get();
         $propertyIds = DB::table('wealth_sources as s')
             ->join('wealth_source_categories as c', 'c.id', '=', 's.category_id')
             ->where('c.is_liquid', false)
@@ -123,6 +123,7 @@ class WealthController
             array_map(fn ($row) => $row->date, $liquidOverTime),
             array_map(fn ($row) => $row->date, $propertyValues),
             $liabilities->flatMap(fn ($l) => $l->records->map(fn ($r) => $r->effective_date->toDateString()))->all(),
+            $liabilities->flatMap(fn ($l) => $l->values->map(fn ($v) => $v->date->toDateString()))->all(),
             [$today->toDateString()],
         );
         $dates = array_values(array_unique($dates));

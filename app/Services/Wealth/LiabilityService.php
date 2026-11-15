@@ -4,6 +4,7 @@ namespace App\Services\Wealth;
 
 use App\Models\Wealth\Liability;
 use App\Models\Wealth\LiabilityRecord;
+use App\Models\Wealth\LiabilityValue;
 use Carbon\CarbonImmutable;
 
 class LiabilityService
@@ -64,7 +65,70 @@ class LiabilityService
 
         $liability->unsetRelation('records');
 
+        // The log from this record's date onwards now follows the new projection.
+        $this->syncLog($liability, rebuild: true);
+
         return $record;
+    }
+
+    /**
+     * Keep the balance log up to date: the entered balance on the current record's "as of" date,
+     * then the projected balance on each payment date that has passed. Existing rows are left
+     * alone unless $rebuild is set, which re-projects everything after the current record.
+     * Returns the number of rows added.
+     */
+    public function syncLog(Liability $liability, bool $rebuild = false): int
+    {
+        $record = $liability->records()->first();
+
+        if (! $record) {
+            return 0;
+        }
+
+        $from   = $record->effective_date->toDateString();
+        $today  = CarbonImmutable::today()->toDateString();
+        $anchor = ['balance' => $record->balance, 'projected_balance' => $record->projected_balance, 'is_manual' => true];
+
+        if ($rebuild) {
+            $liability->values()->where('date', '>', $from)->delete();
+            $liability->values()->updateOrCreate(['date' => $from], $anchor);
+        } else {
+            $liability->values()->firstOrCreate(['date' => $from], $anchor);
+        }
+
+        $logged = $liability->values()->where('date', '>', $from)->get()->map(fn ($v) => $v->date->toDateString())->all();
+        $added  = 0;
+
+        foreach ($this->calculator->forecast($this->inputs($record))['schedule'] as [$date, $balance]) {
+            if ($date > $from && $date <= $today && ! in_array($date, $logged)) {
+                $liability->values()->create(['date' => $date, 'balance' => $balance, 'projected_balance' => $balance]);
+                $added++;
+            }
+        }
+
+        $liability->unsetRelation('values');
+
+        return $added;
+    }
+
+    /**
+     * Correct a logged balance. The correction is saved as a new record dated that day,
+     * so the projection (and every later log entry) continues from the corrected figure.
+     */
+    public function correctValue(Liability $liability, LiabilityValue $value, float $balance): LiabilityRecord
+    {
+        $record   = $liability->records()->first();
+        $schedule = $this->calculator->forecast($this->inputs($record))['schedule'];
+        $elapsed  = $this->paymentsMade($schedule, CarbonImmutable::parse($value->date));
+
+        return $this->saveRecord($liability, [
+            ...$this->inputs($record),
+            'effective_date' => $value->date->toDateString(),
+            'balance'        => $balance,
+            'term_months'    => max(1, $record->term_months - $elapsed),
+            // The payment is contractual: a corrected balance must not recalculate it.
+            'actual_payment' => $record->monthly_payment,
+        ], sprintf('Logged balance for %s corrected.', $value->date->format('j M Y')));
     }
 
     /**
@@ -135,6 +199,15 @@ class LiabilityService
             'schedule_contractual' => [],
             'form'                 => null,
             'records'              => $liability->records->sortByDesc('id')->values(),
+            // Entries since the current record can be corrected; earlier ones are history.
+            'values'               => $liability->values->map(fn (LiabilityValue $v) => [
+                'id'                => $v->id,
+                'date'              => $v->date->toDateString(),
+                'balance'           => $v->balance,
+                'projected_balance' => $v->projected_balance,
+                'is_manual'         => $v->is_manual,
+                'editable'          => $record && $v->date->gte($record->effective_date),
+            ])->values(),
             'overpayments'         => $liability->overpayments->map(fn ($o) => [
                 'id'      => $o->id,
                 'paid_on' => $o->paid_on->toDateString(),
@@ -286,7 +359,10 @@ class LiabilityService
             $changes[] = "Regular overpayment {$money($previous->regular_overpayment)} → {$money($new['regular_overpayment'])}.";
         }
 
-        if ($new['actual_payment'] != $previous->actual_payment) {
+        // Carrying the same payment forward explicitly is not a change.
+        $samePayment = $new['actual_payment'] == $previous->monthly_payment && ! $previous->actual_payment;
+
+        if ($new['actual_payment'] != $previous->actual_payment && ! $samePayment) {
             $from      = $previous->actual_payment ? $money($previous->actual_payment) : 'calculated';
             $to        = $new['actual_payment'] ? $money($new['actual_payment']) : 'calculated';
             $changes[] = "Lender's payment {$from} → {$to}.";
