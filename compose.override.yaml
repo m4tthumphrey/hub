@@ -1,0 +1,14 @@
+# Local only: http://hub.test through Traefik (~/php/local/traefik).
+services:
+    hub:
+        labels:
+            - traefik.enable=true
+            - 'traefik.http.routers.hub.rule=Host(`hub.test`)'
+            - traefik.http.routers.hub.entrypoints=web
+            - traefik.http.services.hub.loadbalancer.server.port=80
+        networks:
+            - sail
+            - proxy
+networks:
+    proxy:
+        external: true
