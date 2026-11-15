@@ -25,7 +25,10 @@ class ScreenshotTextParser
             // "Cash ISA" is followed by "Easy access" then the balance; the
             // headline "My savings" figure is truncated (no pence) by OCR.
             'Tembo'       => $this->amountFor(12, $lines, 'Cash ISA'),
-            'MyAviva'     => $this->amountFor(9, $lines, 'YOUR WEALTH PORTFOLIO'),
+            // "Total savings" is the headline figure across all OakNorth
+            // accounts, with the balance on the following line.
+            'OakNorth Personal' => $this->amountFor(13, $lines, 'Total savings'),
+            'MyAviva'     =>$this->amountFor(9, $lines, 'YOUR WEALTH PORTFOLIO'),
             // "SAVINGS" is the section header above the Regular Saver
             // account -- the app also shows Joint/Personal current accounts,
             // which we deliberately don't want to pick up here.
