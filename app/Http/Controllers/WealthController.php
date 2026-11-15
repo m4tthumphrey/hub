@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Wealth\Liability;
 use App\Models\Wealth\Screenshot;
 use App\Models\Wealth\Source;
+use App\Services\Wealth\LiabilityService;
 use App\Services\Wealth\ScreenshotTextParser;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -16,10 +19,10 @@ class WealthController
         return view('wealth.index');
     }
 
-    public function data(): array
+    public function data(LiabilityService $liabilityService): array
     {
         $sources = DB::select("
-            SELECT s.id, s.who, s.description, s.category_id, c.name as category_name,
+            SELECT s.id, s.who, s.description, s.category_id, c.name as category_name, c.is_liquid,
                    s.regular_amount, s.current_amount
             FROM wealth_sources s
             JOIN wealth_source_categories c ON c.id = s.category_id
@@ -29,7 +32,8 @@ class WealthController
             select c.name, sum(s.current_amount) as total
             from wealth_sources s
             join wealth_source_categories c on (c.id = s.category_id)
-            group by c.id");
+            where c.is_liquid = 1
+            group by c.id, c.name");
 
         $totals[] = (object) [
             'name'  => 'Total',
@@ -38,14 +42,33 @@ class WealthController
             })
         ];
 
+        // Total stays as liquid wealth; property and liabilities sit alongside it.
+        $liquid   = (int) end($totals)->total;
+        $property = (int) array_sum(array_map(fn ($s) => $s->is_liquid ? 0 : $s->current_amount, $sources));
+        $today    = CarbonImmutable::today();
+        $owed     = (int) round(Liability::with('records')->get()->sum(
+            fn (Liability $liability) => $liabilityService->balanceOn($liability, $today) ?? 0
+        ));
+
         return [
             'sources' => $sources,
             'totals'  => $totals,
+            'summary' => [
+                'property'    => $property,
+                'liabilities' => $owed,
+                'net_worth'   => $liquid + $property - $owed,
+            ],
         ];
     }
 
-    public function history(): array
+    public function history(LiabilityService $liabilityService): array
     {
+        $liquidSources = "
+            SELECT s.id FROM wealth_sources s
+            JOIN wealth_source_categories c ON c.id = s.category_id
+            WHERE c.is_liquid = 1
+        ";
+
         $totalOverTime = DB::select("
             SELECT d.date, SUM(COALESCE((
                 SELECT sv.value
@@ -54,8 +77,11 @@ class WealthController
                 ORDER BY sv.created_at DESC
                 LIMIT 1
             ), 0)) as total
-            FROM (SELECT DISTINCT DATE(created_at) as date FROM wealth_source_values) d
-            CROSS JOIN wealth_sources s
+            FROM (
+                SELECT DISTINCT DATE(created_at) as date FROM wealth_source_values
+                WHERE source_id IN ($liquidSources)
+            ) d
+            CROSS JOIN ($liquidSources) s
             GROUP BY d.date
             ORDER BY d.date ASC
         ");
@@ -74,6 +100,78 @@ class WealthController
         return [
             'total_over_time' => $totalOverTime,
             'by_source'       => $bySource,
+        ] + $this->netWorthHistory($totalOverTime, $bySource, $liabilityService);
+    }
+
+    /**
+     * Liabilities and net worth by date. Liabilities start at the first saved record;
+     * net worth starts on the first day a property value exists.
+     */
+    private function netWorthHistory(array $liquidOverTime, array $bySource, LiabilityService $liabilityService): array
+    {
+        $today       = CarbonImmutable::today();
+        $liabilities = Liability::with('records')->get();
+        $propertyIds = DB::table('wealth_sources as s')
+            ->join('wealth_source_categories as c', 'c.id', '=', 's.category_id')
+            ->where('c.is_liquid', false)
+            ->pluck('s.id')
+            ->all();
+
+        $propertyValues = array_values(array_filter($bySource, fn ($row) => in_array($row->id, $propertyIds)));
+
+        $dates = array_merge(
+            array_map(fn ($row) => $row->date, $liquidOverTime),
+            array_map(fn ($row) => $row->date, $propertyValues),
+            $liabilities->flatMap(fn ($l) => $l->records->map(fn ($r) => $r->effective_date->toDateString()))->all(),
+            [$today->toDateString()],
+        );
+        $dates = array_values(array_unique($dates));
+        sort($dates);
+
+        // Latest value on or before a date, from rows sorted by date ascending.
+        $latest = function (array $rows, string $date, string $field) {
+            $value = null;
+            foreach ($rows as $row) {
+                if ($row->date > $date) {
+                    break;
+                }
+                $value = $row->{$field};
+            }
+
+            return $value;
+        };
+
+        $liabilitiesOverTime = [];
+        $netWorthOverTime    = [];
+
+        foreach ($dates as $date) {
+            $balances = $liabilities
+                ->map(fn ($liability) => $liabilityService->balanceOn($liability, CarbonImmutable::parse($date)))
+                ->filter(fn ($balance) => $balance !== null);
+
+            $owed = (int) round($balances->sum());
+
+            if ($balances->isNotEmpty()) {
+                $liabilitiesOverTime[] = ['date' => $date, 'total' => $owed];
+            }
+
+            $property = null;
+            foreach ($propertyIds as $id) {
+                $value = $latest(array_values(array_filter($propertyValues, fn ($row) => $row->id === $id)), $date, 'value');
+                if ($value !== null) {
+                    $property += $value;
+                }
+            }
+
+            if ($property !== null) {
+                $liquid             = (int) ($latest($liquidOverTime, $date, 'total') ?? 0);
+                $netWorthOverTime[] = ['date' => $date, 'total' => $liquid + $property - $owed];
+            }
+        }
+
+        return [
+            'liabilities_over_time' => $liabilitiesOverTime,
+            'net_worth_over_time'   => $netWorthOverTime,
         ];
     }
 

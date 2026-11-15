@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LiabilityController;
 use App\Http\Controllers\WealthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -32,5 +33,15 @@ Route::group(['middleware' => 'auth.basic'], function () {
         Route::get('/history', 'history')->name('history');
         Route::post('/update', 'update')->name('update');
         Route::post('/screenshot', 'screenshot')->name('screenshot');
+    });
+
+    Route::name('wealth.liabilities.')->prefix('wealth/liabilities')->controller(LiabilityController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::post('/preview', 'preview')->name('preview');
+        Route::post('/{liability}/what-if', 'whatIf')->name('what-if');
+        Route::post('/{liability}/records', 'storeRecord')->name('records.store');
+        Route::post('/{liability}/overpayments', 'storeOverpayment')->name('overpayments.store');
+        Route::delete('/{liability}/overpayments/{overpayment}', 'destroyOverpayment')->name('overpayments.destroy');
     });
 });

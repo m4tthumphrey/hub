@@ -29,15 +29,44 @@
                 </div>
             </div>
 
+            <!-- Property, liabilities and net worth -->
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
+                    <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Property</div>
+                    <div class="text-xl font-bold tabular-nums text-white">£{{ formatAmount(summary.property) }}</div>
+                </div>
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
+                    <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Liabilities</div>
+                    <div class="text-xl font-bold tabular-nums" :class="summary.liabilities > 0 ? 'text-rose-400' : 'text-white'">
+                        {{ summary.liabilities > 0 ? '−' : '' }}£{{ formatAmount(summary.liabilities) }}
+                    </div>
+                </div>
+                <div class="border border-indigo-900/60 bg-indigo-950/40 rounded-xl px-5 py-4">
+                    <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Net Worth</div>
+                    <div class="text-2xl font-bold tabular-nums text-indigo-300">£{{ formatAmount(summary.net_worth) }}</div>
+                </div>
+            </div>
+
             <!-- Charts -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 <!-- Total wealth over time -->
                 <div class="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <div class="flex items-center justify-between mb-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                         <h2 class="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            {{ selectedCategory ? selectedCategory : 'Total Wealth Over Time' }}
+                            {{ selectedCategory ? selectedCategory : chartViews[chartView] }}
                         </h2>
+                        <div v-if="!selectedCategory" class="inline-flex rounded-lg border border-gray-700 overflow-hidden text-xs">
+                            <button
+                                v-for="(label, view) in chartViewLabels"
+                                :key="view"
+                                @click="chartView = view"
+                                class="px-3 py-1 transition-colors"
+                                :class="chartView === view ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'"
+                            >
+                                {{ label }}
+                            </button>
+                        </div>
                         <button
                             v-if="selectedCategory"
                             @click="selectedCategory = null"
@@ -48,7 +77,7 @@
                     </div>
                     <ApexChart
                         v-if="areaChartSeries[0].data.length > 1"
-                        :key="`area-${chartVersion}-${selectedCategory ?? 'all'}`"
+                        :key="`area-${chartVersion}-${selectedCategory ?? chartView}`"
                         type="area"
                         height="220"
                         :options="areaChartOptions"
@@ -92,7 +121,7 @@
                         </thead>
                         <tbody class="divide-y divide-gray-800/60">
                             <tr
-                                v-for="source in sources"
+                                v-for="source in liquidSources"
                                 :key="source.id"
                                 class="hover:bg-gray-800/40 transition-colors"
                             >
@@ -146,6 +175,13 @@
                 </div>
             </div>
 
+            <LiabilitiesPanel
+                :properties="propertySources"
+                :net-worth="summary.net_worth"
+                @update-source="(id, value) => updateField(id, 'current', value)"
+                @changed="refresh"
+            />
+
         </main>
     </div>
 </template>
@@ -154,10 +190,20 @@
 import { ref, computed, onMounted } from 'vue'
 import ApexChart from 'vue3-apexcharts'
 import axios from 'axios'
+import LiabilitiesPanel from './LiabilitiesPanel.vue'
 
 const sources = ref([])
 const totals = ref([])
-const history = ref({ total_over_time: [], by_source: [] })
+const summary = ref({ property: 0, liabilities: 0, net_worth: 0 })
+const history = ref({ total_over_time: [], by_source: [], liabilities_over_time: [], net_worth_over_time: [] })
+
+// The house lives in a non-liquid category: it is edited in the property panel, not the sources table.
+const liquidSources = computed(() => sources.value.filter(s => s.is_liquid))
+const propertySources = computed(() => sources.value.filter(s => !s.is_liquid))
+
+const chartView = ref('liquid')
+const chartViewLabels = { liquid: 'Liquid', net: 'Net worth', liabilities: 'Liabilities' }
+const chartViews = { liquid: 'Total Wealth Over Time', net: 'Net Worth Over Time', liabilities: 'Liabilities Over Time' }
 const loading = ref(true)
 const chartVersion = ref(0)
 const selectedCategory = ref(null)
@@ -192,9 +238,15 @@ const CHART_COLORS = ['#6366f1', '#22d3ee', '#a78bfa', '#34d399', '#f59e0b', '#f
 
 const areaChartSeries = computed(() => {
     if (!selectedCategory.value) {
+        const series = {
+            liquid: history.value.total_over_time,
+            net: history.value.net_worth_over_time,
+            liabilities: history.value.liabilities_over_time,
+        }[chartView.value]
+
         return [{
-            name: 'Total Wealth',
-            data: history.value.total_over_time.map(d => ({
+            name: chartViews[chartView.value].replace(' Over Time', ''),
+            data: series.map(d => ({
                 x: new Date(d.date).getTime(),
                 y: d.total,
             })),
@@ -344,29 +396,30 @@ function sparklineOptions(sourceId, currentAmount) {
 
 // --- Actions ---
 
-async function updateField(id, name, value) {
-    await axios.post('/wealth/update', { id, name, value })
-    const source = sources.value.find(s => s.id === id)
-    if (name === 'current') {
-        source.current_amount = parseInt(value)
-        const res = await axios.get('/wealth/data')
-        totals.value = res.data.totals
-        const histRes = await axios.get('/wealth/history')
-        history.value = histRes.data
-        chartVersion.value++
-    } else {
-        source.regular_amount = parseInt(value)
-    }
-}
-
-onMounted(async () => {
+async function refresh() {
     const [dataRes, histRes] = await Promise.all([
         axios.get('/wealth/data'),
         axios.get('/wealth/history'),
     ])
     sources.value = dataRes.data.sources
     totals.value = dataRes.data.totals
+    summary.value = dataRes.data.summary
     history.value = histRes.data
+    chartVersion.value++
+}
+
+async function updateField(id, name, value) {
+    await axios.post('/wealth/update', { id, name, value })
+    const source = sources.value.find(s => s.id === id)
+    if (name === 'current') {
+        await refresh()
+    } else {
+        source.regular_amount = parseInt(value)
+    }
+}
+
+onMounted(async () => {
+    await refresh()
     loading.value = false
 })
 </script>
