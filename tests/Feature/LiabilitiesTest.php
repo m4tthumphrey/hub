@@ -19,6 +19,11 @@ class LiabilitiesTest extends TestCase
 
         $this->withoutMiddleware(\Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class);
         $this->travelTo('2026-11-15 10:00:00');
+
+        // These tests build their own liquid sources, so drop the ones seeded by migrations.
+        $seeded = DB::table('wealth_sources')->where('description', 'NatWest joint')->pluck('id');
+        DB::table('wealth_source_values')->whereIn('source_id', $seeded)->delete();
+        DB::table('wealth_sources')->whereIn('id', $seeded)->delete();
     }
 
     private function details(array $overrides = []): array

@@ -2,6 +2,8 @@
 
 namespace App\Services\Wealth;
 
+use App\Models\Wealth\Source;
+
 class ScreenshotTextParser
 {
     // [£€] because OCR sometimes misreads the £ symbol as € on large/stylised digits.
@@ -29,14 +31,30 @@ class ScreenshotTextParser
             // accounts, with the balance on the following line.
             'OakNorth Personal' => $this->amountFor(13, $lines, 'Total savings'),
             'MyAviva'     =>$this->amountFor(9, $lines, 'YOUR WEALTH PORTFOLIO'),
-            // "SAVINGS" is the section header above the Regular Saver
-            // account -- the app also shows Joint/Personal current accounts,
-            // which we deliberately don't want to pick up here.
-            'NatWest'     => $this->amountFor(1, $lines, 'SAVINGS'),
+            'NatWest'     => $this->natwest($lines),
             'Chrome'      => $this->retiready($lines, $text),
             'HL'          => $this->firstAmount(7, $text),
             default       => $this->courtiers($text),
         };
+    }
+
+    private function natwest(array $lines): array
+    {
+        // The accounts screen lists each account under a section header:
+        // "SAVINGS" sits above the Regular Saver (source 1) and "JOINT" above
+        // the joint current account. The "PERSONAL" current account isn't tracked.
+        $updates = $this->amountFor(1, $lines, 'SAVINGS');
+
+        // The joint account was added by migration, so its id isn't fixed
+        // across databases like the hand-created sources -- look it up.
+        $jointId = Source::where('description', 'NatWest joint')->value('id');
+        $joint   = $this->amountAfterLabel($lines, 'JOINT');
+
+        if ($jointId !== null && $joint !== null) {
+            $updates[$jointId] = $joint;
+        }
+
+        return $updates;
     }
 
     private function tradingTwoOneTwo(array $lines, string $text): array
